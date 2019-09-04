@@ -1,4 +1,6 @@
 require "bundler/setup"
+require 'dotenv/load'
+require 'securerandom'
 require "shared_config"
 
 RSpec.configure do |config|
@@ -11,4 +13,9 @@ RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = :expect
   end
+
+  def rand_string
+    return SecureRandom.hex(12)
+  end
+
 end
