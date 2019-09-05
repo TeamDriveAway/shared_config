@@ -12,4 +12,5 @@ require "shared_config"
 
 require "irb"
 require 'dotenv/load'
+ENV['DEBUG_SHARED_CONFIG'] = 'true'
 IRB.start(__FILE__)
