@@ -11,4 +11,5 @@ require "shared_config"
 # Pry.start
 
 require "irb"
+require 'dotenv/load'
 IRB.start(__FILE__)

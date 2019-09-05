@@ -1,9 +1,12 @@
 require "spec_helper"
 RSpec.describe SharedConfig do
-  let(:object){Aws::S3::Object.new(bucket_name: ENV['S3_CONFIG_BUCKET'], key: rand_string)}
+  let(:object){Aws::S3::Object.new(bucket_name: ENV['S3_CONFIG_BUCKET'], key: "#{ENV['SHARED_CONFIG_PATH_ROOT']}/#{rand_string}.json")}
+  let(:group_name){SecureRandom.hex(12)}
+  let(:object_key){"s3://#{SecureRandom.hex}"}
+  let(:client){Aws::S3::Client.new}
+  let(:bucket){Aws::S3::Bucket.new(name: ENV['S3_CONFIG_BUCKET'], client: client)}
+
   describe SharedConfig::S3 do
-    let(:group_name){SecureRandom.hex(12)}
-    let(:object_key){"s3://#{SecureRandom.hex}"}
     # let(:group){SharedConfig::Group.new(group_name)}
 
     it "calls create a group with supplied " do
@@ -25,7 +28,7 @@ RSpec.describe SharedConfig do
 
     describe SharedConfig::ObjectKeys do
       describe "from_group_names" do
-        it "should call from_group_name for each item supplied" do
+        it "calls from_group_name for each item supplied" do
           names = %w{some-name some-other}
           expect(described_class).to receive(:from_group_name).with('some-name')
           expect(described_class).to receive(:from_group_name).with('some-other')
@@ -37,7 +40,7 @@ RSpec.describe SharedConfig do
         end
       end
       describe "from_group_name" do
-        it "should combine the the name with ENV['SHARED_CONFIG_PATH_ROOT']" do
+        it "combines the the name with ENV['SHARED_CONFIG_PATH_ROOT']" do
           expect(described_class.from_group_name('some-group-name')).to eq("#{ENV['SHARED_CONFIG_PATH_ROOT']}/some-group-name.json")
           expect(described_class.from_group_name('some-group-name.json')).to eq("#{ENV['SHARED_CONFIG_PATH_ROOT']}/some-group-name.json")
         end
@@ -45,7 +48,7 @@ RSpec.describe SharedConfig do
     end
     describe SharedConfig::EnvVar do
       describe "set" do
-        it "should set an environment variable" do
+        it "sets an environment variable" do
           key = rand_string
           value = rand_string
           described_class.set(key, value)
@@ -58,40 +61,58 @@ RSpec.describe SharedConfig do
       subject{described_class.new(object_key: rand_string, object: object)}
 
       describe "load" do
-        it "should call EnvVar.set with item from load_json" do
+        it "calls EnvVar.set with item from load_json" do
           expect(subject).to receive(:load_json).with(subject.object){{"key"=>"value"}}
           expect(SharedConfig::EnvVar).to receive(:set).with("key", "value")
           subject.load
         end
       end
+
       describe "load_json" do
         let(:body){double("Body")}
 
-        it "should return a parsed version of the object's content" do
+        it "returns a parsed version of the object's content" do
           expect(object).to receive(:body){body}
           expect(body).to receive(:read){"\[1\]"}
           expect(subject.load_json(object)).to eq([1])
         end
 
-        it "should not blow up if the json is unparseable" do
+        it "does not blow up if the json is unparseable" do
           expect(object).to receive(:body){body}
           expect(body).to receive(:read){""}
           expect(subject.load_json(object)).to eq({})
         end
 
-        it "should not blow up if the returned value is nil" do
+        it "does not blow up if the returned value is nil" do
           expect(object).to receive(:body){body}
           expect(body).to receive(:read){nil}
           expect(subject.load_json(object)).to eq({})
         end
       end
+
       describe "load_object" do
-        it "should load the object wth the env bucket" do
-          client = Aws::S3::Client.new
-          expect(subject).to receive(:client){client}
-          expect(client).to receive(:get_object).with(bucket: ENV['S3_CONFIG_BUCKET'], key: subject.object_key){object}
+        it "loads the object wth the env bucket" do
+          expect(subject).to receive(:bucket){bucket}
+          expect(bucket).to receive(:objects){{subject.object_key=>object}}
           subject.load_object
           expect(subject.object).to eq(object)
+        end
+      end
+
+      describe "all_objects_regexp" do
+        it "includes ENV['SHARED_CONFIG_PATH_ROOT']" do
+          expect(subject.all_objects_regexp.to_s).to include(ENV['SHARED_CONFIG_PATH_ROOT'])
+        end
+      end
+
+      describe "all" do
+        it "returns object list by the client" do
+          expect(described_class).to receive(:bucket){bucket}
+          collection = Aws::S3::ObjectSummary::Collection.new(nil)
+          binding.irb
+          expect(bucket).to receive(:objects).with(prefix: ENV['SHARED_CONFIG_PATH_ROOT']){collection}
+          expect(collection).to receive(:each)
+          objects = described_class.all
         end
       end
     end

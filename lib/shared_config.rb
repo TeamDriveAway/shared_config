@@ -21,7 +21,6 @@ module SharedConfig
       def from_group_name(group_name)
         filename = group_name =~ /\.json$/ ? group_name : "#{group_name}.json"
         elements = [ENV['SHARED_CONFIG_PATH_ROOT'], filename]
-
         return File.join(elements.compact.reject(&:empty?))
       end
     end
@@ -49,8 +48,7 @@ module SharedConfig
     end
 
     def load_object
-      puts self.object_key
-      @object=self.client.get_object(bucket: ENV['S3_CONFIG_BUCKET'], key: self.object_key)
+      @object=self.bucket.objects[self.object_key]
     end
 
     def load_json(object)
@@ -63,8 +61,25 @@ module SharedConfig
       return Aws::S3::Client.new
     end
 
-    def self.all
-      return []
+
+    class << self
+      def bucket
+        return Aws::S3::Bucket.new(:name=>ENV['S3_CONFIG_BUCKET'], :client=>Aws::S3::Client.new)
+      end
+
+      def all
+        objects = []
+        self.bucket.objects(prefix: ENV['SHARED_CONFIG_PATH_ROOT']).each{|os|
+          if os.key =~ /\.json$/
+            objects << os.get
+          end
+        }
+        return objects
+      end
+    end
+
+    def all_objects_regexp
+      Regexp.new('^'+ENV['SHARED_CONFIG_PATH_ROOT']+'.*\.json$')
     end
   end
 end
